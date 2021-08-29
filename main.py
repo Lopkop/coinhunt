@@ -1,15 +1,13 @@
 import logging
 
-from aiogram import Dispatcher, Bot, executor
+from aiogram import Dispatcher, executor
 from aiogram import types
 
-from config.settings import ADMIN_ID, TELEGRAM_API_TOKEN, FORMAT
+from config.settings import ADMIN_ID, bot
 
-logging.basicConfig(level=logging.WARNING, filename='logs/warnings.log', format=FORMAT)
+from handlers.handlers import dp
+
 logger = logging.getLogger(__name__)
-
-bot = Bot(TELEGRAM_API_TOKEN)
-dp = Dispatcher(bot)
 
 
 async def set_default_commands(dp: Dispatcher):
@@ -18,8 +16,10 @@ async def set_default_commands(dp: Dispatcher):
         [
             types.BotCommand("start", "start bot."),
             types.BotCommand("help", "help menu."),
-            types.BotCommand("monitor", "monitor coin."),
-            types.BotCommand("top", "Shows today's top coins."),
+            types.BotCommand("monitor", "Добавить монету за которой я буду следить."),
+            types.BotCommand("my_coins", "Посмотреть на монеты за которыми я слежу."),
+            types.BotCommand("check_my_coins", "Я буду следить за вашими монетами раз в минуту."),
+            types.BotCommand("top", "Посмотреть today's best coins."),
         ]
     )
 
@@ -35,10 +35,5 @@ async def on_startup(dp: Dispatcher):
     await notify_admin_on_startup()
 
 
-# TODO: SELENIUM
-# TODO: parser finish
-# TODO: finish bot
 if __name__ == '__main__':
-    from handlers.handlers import dp
-
-    executor.start_polling(dp, on_startup=on_startup)
+    executor.start_polling(dp, on_startup=on_startup, skip_updates=True)

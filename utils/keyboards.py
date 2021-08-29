@@ -1,23 +1,15 @@
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup
-
-from .business import get_coins
-
-# coins_menu = ReplyKeyboardMarkup(
-#     keyboard=[
-#         [
-#             KeyboardButton(text='Pizza Token'),
-#             KeyboardButton(text='Nasty token'),
-#         ],
-#     ],
-#     resize_keyboard=True
-# )
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 
-coins_menu = InlineKeyboardMarkup()
+top_choice = InlineKeyboardMarkup()
 
-for coin in get_coins():
-    coins_menu.insert(InlineKeyboardButton(text=coin.name, callback_data=f'monitor:{coin.name}'))
+tops = ['Топ 1', 'Топ 2', 'Топ 3', 'Топ 4', 'Топ 5', 'Топ 6', 'Топ 7', 'Топ 8', 'Топ 9', 'Топ 10']
 
-cancel_choice = InlineKeyboardMarkup()
+for number, top in enumerate(tops, 1):
+    top_choice.insert(InlineKeyboardButton(text=top, callback_data=f'top:{number}'))
+top_choice.insert(InlineKeyboardButton(text='Отмена', callback_data=f'cancel:coin'))
 
-cancel_choice.insert(InlineKeyboardButton(text='Отмена', callback_data=f'cancel'))
+
+delete_my_coins = InlineKeyboardMarkup()
+
+

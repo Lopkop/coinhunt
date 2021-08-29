@@ -1,13 +1,14 @@
+import time
 import logging
 
-import requests
 from bs4 import BeautifulSoup
+from selenium import webdriver
 
 logger = logging.getLogger(__name__)
 
 
 def _get_coin(coin_name, coin_id, coin_votes) -> dict:
-    """Returns coin in json format."""
+    """Returns coin in json format"""
     return {'name': coin_name.text.strip(),
             'id': coin_id['href'].replace('/coin/', '').strip(),
             'votes': coin_votes.text.strip()
@@ -15,10 +16,13 @@ def _get_coin(coin_name, coin_id, coin_votes) -> dict:
 
 
 def _todays_best(parser: BeautifulSoup) -> dict:
-    """Parser that parse today's best catalog on https://coinhunt.cc."""
+    """Parser that parse today's best catalog on https://coinhunt.cc"""
     coins_table = parser.find('div', class_='Landing_table__2kfJT')
-    coins = coins_table.find_all('div', class_='sc-hKFxyN jtSqOG') + coins_table.find_all('div',
-                                                                                          class_='sc-dlnjwi keogPe')
+    coins = coins_table.find_all('div', class_='sc-gKAaRy dkOltH') + \
+            coins_table.find_all('div', class_='sc-hKFxyN jtSqOG') + \
+            coins_table.find_all('div', class_='sc-jSFjdj bcukKH') + \
+            coins_table.find_all('div', class_='sc-dlnjwi keogPe')
+
     if not coins:
         logger.critical(f'coins is the {coins}')
 
@@ -37,8 +41,17 @@ def _todays_best(parser: BeautifulSoup) -> dict:
 
 
 def get_coins_in_json() -> list[dict]:
-    """Initializes a parser and retuns today's best catalog."""
-    page = requests.get('https://coinhunt.cc')
-    soup = BeautifulSoup(page.text, 'html.parser')
+    """Initializes a parser and returns today's best catalog"""
+    options = webdriver.FirefoxOptions()
+    options.add_argument('--ignore-certificate-errors')
+    options.add_argument('--incognito')
+    options.add_argument('--headless')
+    driver = webdriver.Firefox(executable_path='/Users/arsen/Desktop/geckodriver', options=options)
 
+    driver.get('https://coinhunt.cc')
+    element = driver.find_element_by_css_selector('p.Landing_ShowAll__1jQ77')
+    driver.execute_script('arguments[0].click();', element)
+    time.sleep(1)
+
+    soup = BeautifulSoup(driver.page_source, 'html.parser')
     return list(_todays_best(soup))
