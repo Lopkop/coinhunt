@@ -19,7 +19,7 @@ async def create_db():
     )
     values = await conn.fetchrow('SELECT * FROM coin WHERE id=1')
     user_values = await conn.fetchrow('SELECT * FROM users WHERE id=1')
-    if not (values and user_values):
+    if not values or not user_values:
         logger.critical('db is not created yet.')
         await conn.execute(sql)
     await conn.close()
@@ -51,14 +51,14 @@ async def get_from_db(*, user_id: Union[int, None] = None, coin_id: Union[int, N
     return bool(value)
 
 
-async def get_coin_and_top_from_user_coins(user_id: int):
+async def get_coin_top_votes_from_user_coins(user_id: int):
     conn: asyncpg.Connection = await create_pool()
     if not await get_from_db(user_id=user_id):
         logger.info(f'Usser is not in the DB - {user_id}')
         raise UserIsNotExistError('User is not in the DB.')
     else:
         coin = await conn.fetch(
-            "SELECT coin, top FROM user_coins WHERE user_id=$1",
+            "SELECT coin, top, votes FROM user_coins WHERE user_id=$1",
             int(user_id)
         )
     await conn.close()
@@ -74,6 +74,21 @@ async def update_user_coins(*, user_id: int, coin_id: int, top: int):
         await conn.execute(
             "UPDATE user_coins SET top=$1 WHERE user_id=$2 and coin=$3;",
             int(top),
+            int(user_id),
+            int(coin_id),
+        )
+    await conn.close()
+
+
+async def update_user_coins_votes(*, user_id: int, coin_id: int, votes: int):
+    conn: asyncpg.Connection = await create_pool()
+    if not await get_from_db(user_id=user_id):
+        logger.info(f'Usser is not in the DB - {user_id}')
+        raise UserIsNotExistError('User is not in the DB.')
+    else:
+        await conn.execute(
+            "UPDATE user_coins SET votes=$1 WHERE user_id=$2 and coin=$3;",
+            int(votes),
             int(user_id),
             int(coin_id),
         )

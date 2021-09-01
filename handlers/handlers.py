@@ -6,16 +6,17 @@ from aiogram.utils.emoji import emojize
 from aiogram.utils.markdown import text
 from asyncpg import UniqueViolationError
 
-from config.settings import dp
-from utils.business import get_coins, validate_and_make_relationship
-from utils.callback_data import monitor_callback, top_callback, delete_my_coin_callback
+from config.settings import dp, bot
+from utils.business import get_coins, validate_and_make_relationship, get_my_coins
+from utils.callback_data import monitor_callback, top_callback, delete_my_coin_callback, votes_callback
 from utils.keyboards import top_choice
-from config.database import get_coin_and_top_from_user_coins, update_user_coins, insert_into_users, \
-    delete_from_user_coins
+from config.database import get_coin_top_votes_from_user_coins, update_user_coins, insert_into_users, \
+    delete_from_user_coins, update_user_coins_votes
 from utils.exceptions import UserIsNotExistError
 
 logger = logging.getLogger(__name__)
 
+coin_name = None
 flag = False
 
 
@@ -28,7 +29,7 @@ async def start_and_help(message: Message):
 async def notify_user_every_minute(message: Message):
     global flag
 
-    if not await get_coin_and_top_from_user_coins(user_id=message['chat']['id']):
+    if not await get_coin_top_votes_from_user_coins(user_id=message['chat']['id']):
         await message.answer('Вы не выбрали монетy.')
         return
 
@@ -38,25 +39,27 @@ async def notify_user_every_minute(message: Message):
 
     flag = True
     while True:
-        coins_and_tops = await get_coin_and_top_from_user_coins(user_id=message['chat']['id'])
-        if not coins_and_tops:
+        coins_tops_votes = await get_coin_top_votes_from_user_coins(user_id=message['chat']['id'])
+        if not coins_tops_votes:
             await message.answer('Вы удалили все монеты.')
             return
         await message.answer('Начал следить за вашими монетами')
 
         for number, coin in enumerate(get_coins(), 1):
-            if (int(coin.id), number) in ((coin_and_top.get('coin'), coin_and_top.get('top')) for coin_and_top in
-                                          coins_and_tops):
-                await message.answer(emojize(text(f'Воу! {coin.name} Топ {number}🔥', sep='\n')),
-                                     parse_mode=ParseMode.MARKDOWN)
-            if (int(coin.id), number) in ((coin_and_top.get('coin'), coin_and_top.get('top') + 1) for coin_and_top
-                                          in coins_and_tops):
-                await message.answer(text(f'Эй! {coin.name} Топ {number}❗️❗', sep='\n'),
-                                     parse_mode=ParseMode.MARKDOWN)
-            if (int(coin.id), number) in ((coin_and_top.get('coin'), coin_and_top.get('top') + 2) for coin_and_top
-                                          in coins_and_tops):
-                await message.answer(text(f'Эх, {coin.name} Топ {number}😥️', sep='\n'),
-                                     parse_mode=ParseMode.MARKDOWN)
+            for coin_top_vote in coins_tops_votes:
+                if (votes := coin_top_vote.get('votes')) != -1:
+                    if int(coin.votes) == votes:
+                        await message.answer(emojize(text(f'Воу! У {coin.name} {votes} Голосов🔥', sep='\n')),
+                                             parse_mode=ParseMode.MARKDOWN)
+                if (int(coin.id), number) in (coin_top_vote.get('coin'), coin_top_vote.get('top')):
+                    await message.answer(emojize(text(f'Воу! {coin.name} Топ {number}🔥', sep='\n')),
+                                         parse_mode=ParseMode.MARKDOWN)
+                if (int(coin.id), number) in (coin_top_vote.get('coin'), coin_top_vote.get('top') + 1):
+                    await message.answer(text(f'Эй! {coin.name} Топ {number}❗️❗', sep='\n'),
+                                         parse_mode=ParseMode.MARKDOWN)
+                if (int(coin.id), number) in (coin_top_vote.get('coin'), coin_top_vote.get('top') + 2):
+                    await message.answer(text(f'Эх, {coin.name} Топ {number}😥️', sep='\n'),
+                                         parse_mode=ParseMode.MARKDOWN)
         await asyncio.sleep(120)
 
 
@@ -64,33 +67,19 @@ async def notify_user_every_minute(message: Message):
 async def my_coins(message: Message):
     user_id = message['chat']['id']
     try:
-        coins_and_tops = await get_coin_and_top_from_user_coins(user_id=user_id)
+        coins_tops_votes = await get_coin_top_votes_from_user_coins(user_id=user_id)
     except UserIsNotExistError:
         await insert_into_users(user_id=user_id)
         logger.info(f'new user => {user_id}')
         await message.answer('Тут пусто.')
         return
 
-    if not coins_and_tops:
+    if not coins_tops_votes:
         await message.answer('Тут пусто.')
         return
 
     delete_my_coins_menu = InlineKeyboardMarkup()
-
-    answer = """"""
-    for coin_and_top in coins_and_tops:
-        coin_id = coin_and_top.get('coin')
-        for coin in get_coins():
-            if int(coin.id) == int(coin_id):
-                answer += f"Монета: {coin.name}\nТоп: {coin_and_top.get('top')}\n-------------\n"
-                delete_my_coins_menu.insert(InlineKeyboardButton(
-                    text=f'Удалить {coin.name}',
-                    callback_data=f'delete:{message["chat"]["id"]}:{coin_id}:{coin.name}'))
-                break
-        if not answer:
-            await message.answer("Монета за которой вы следите не находится в каталоге today's best, я ее удалю")
-            await delete_from_user_coins(user_id=user_id, coin_id=coin_id)
-            return
+    answer = await get_my_coins(user_id, message, coins_tops_votes, delete_my_coins_menu)
     await message.answer(f'Вы следите за: \n{answer}', reply_markup=delete_my_coins_menu)
 
 
@@ -147,10 +136,55 @@ async def monitor_coin(call: CallbackQuery, callback_data: dict):
 async def top(call: CallbackQuery, callback_data: dict):
     answer = call.message.text.rstrip(". Теперь выберите когда мне вас уведомить.")
     await call.message.delete_reply_markup()
-    await call.message.edit_text(f'{answer} и Топ {callback_data["number"]}.')
+    await call.message.edit_text(f'Подождите пожалуйста, идет загрузка в базу данных.\n10% ██▒▒▒▒▒▒▒▒')
     coin_name = answer.lstrip(f'Вы выбрали ')
 
+    loading_art = iter(
+        ('20% ███▒▒▒▒▒▒▒', '30% ████▒▒▒▒▒▒', '50% █████▒▒▒▒▒', '75% ███████▒▒▒', '90% █████████▒', '100% ██████████')
+    )
+
     for coin in get_coins():
-        if coin.name[0:10] == coin_name[0:10]:
+        try:
+            await call.message.edit_text(f'Подождите пожалуйста, идет загрузка в базу данных.\n{next(loading_art)}')
+        except StopIteration:
+            ...
+        if coin.name[0:10].strip() == coin_name[0:10].strip():
             await update_user_coins(user_id=call.message['chat']['id'], coin_id=coin.id, top=callback_data["number"])
+            await call.message.edit_text(f'{answer} и Топ {callback_data["number"]}.')
             break
+
+
+@dp.callback_query_handler(votes_callback.filter())
+async def votes(call: CallbackQuery):
+    global coin_name
+    answer = call.message.text.rstrip(". Теперь выберите когда мне вас уведомить.")
+    coin_name = answer.lstrip(f'Вы выбрали ')
+    await call.message.delete_reply_markup()
+    await call.message.answer(f'Отправьте мне положительное число: ')
+
+
+@dp.message_handler()
+async def number(message: Message):
+    if not coin_name:
+        await message.answer(f'Я вас не понимаю.')
+        return
+    try:
+        if (votes := int(message.text)) > 0:
+            await message.answer(f'Подождите пожалуйста, идет загрузка в базу данных.')
+        else:
+            await message.answer(f'Нужно положительное число, а не {votes}.')
+            return
+    except ValueError:
+        await message.answer(f'Я вас не понимаю.')
+        return
+
+    flag = False
+    for coin in get_coins():
+        if coin.name[0:10].strip() == coin_name[0:10].strip():
+            flag = True
+            await update_user_coins_votes(user_id=message['chat']['id'], coin_id=coin.id, votes=votes)
+            await message.answer(f'Вы выбрали {coin_name} и {votes} Голосов.')
+            break
+    if not flag:
+        logger.critical(f'190 in handlers.handlers - {coin_name[0:10].strip()}')
+        await message.answer('Техническая ошибка')

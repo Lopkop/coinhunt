@@ -4,7 +4,8 @@ from aiogram import Dispatcher, Bot
 import dotenv
 
 # logging configuration
-logging.basicConfig(level=logging.INFO, format='[%(asctime)s] -- %(levelname)s -- %(message)s')
+logging.basicConfig(level=logging.WARNING, filename='logs/warnings.log',
+                    format='[%(asctime)s] -- %(levelname)s -- %(message)s')
 
 # extract values from .env file
 values = dotenv.dotenv_values('.env')

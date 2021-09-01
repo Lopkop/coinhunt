@@ -7,6 +7,7 @@ tops = ['Топ 1', 'Топ 2', 'Топ 3', 'Топ 4', 'Топ 5', 'Топ 6', 
 
 for number, top in enumerate(tops, 1):
     top_choice.insert(InlineKeyboardButton(text=top, callback_data=f'top:{number}'))
+top_choice.insert(InlineKeyboardButton(text='Голоса', callback_data=f'votes:coin'))
 top_choice.insert(InlineKeyboardButton(text='Отмена', callback_data=f'cancel:coin'))
 
 

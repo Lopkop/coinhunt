@@ -36,8 +36,8 @@ def _todays_best(parser: BeautifulSoup) -> dict:
 
         coin_id = coin.find('a', class_='Landing_RowLink__1d-wr', href=True)
         coin_votes = coin.find('div', class_='Landing_VoteText__wuky1')
-
-        yield _get_coin(coin_name, coin_id, coin_votes)
+        if coin_votes:
+            yield _get_coin(coin_name, coin_id, coin_votes)
 
 
 def get_coins_in_json() -> list[dict]:
